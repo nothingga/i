@@ -1,7 +1,8 @@
+
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# Расширенные углеродные коэффициенты
+
 EMISSIONS = {
     "авто": 0.2,
     "самолёт": 0.25,
@@ -14,17 +15,18 @@ EMISSIONS = {
 }
 
 RECOMMENDATIONS = {
-    "авто": "Используй велосипед или каршеринг.",
-    "самолёт": "Планируй поездки по земле — это полезнее для планеты.",
-    "кондиционер": "Старайся проветривать помещение и использовать вентилятор.",
-    "автобус": "Отличный выбор! Но иногда можно заменить его пешей прогулкой.",
-    "велосипед": "Ты молодец! Это 100% экологично!",
-    "метро": "Очень экологичный выбор. Продолжай в том же духе.",
-    "стиральная машина": "Стирай в холодной воде и запускай полные загрузки.",
-    "смартфон": "Не заряжай телефон ночью, экономь электричество."
+    "авто": "Иногда можно пройтись пешком",
+    "самолёт": "Попробуй поезд, если есть такая возможность",
+    "кондиционер": "Проветривай помещение регулярно",
+    "автобус": "Хороший выбор",
+    "велосипед": "Полностью экологичный транспорт",
+    "метро": "Экологичный способ передвижения",
+    "стиральная машина": "Стирай, когда барабан полностью загружен",
+    "смартфон": "Не заряжай его без необходимости"
 }
 
 user_history = {}
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -34,26 +36,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ["Назад"]
     ]
     await update.message.reply_text(
-        "Выбери действие, чтобы рассчитать углеродный след:",
+        "Выбери одно из действий:",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
 
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👣 С этим ботом ты можешь рассчитать свой углеродный след.\n"
+        "Этот бот помогает отслеживать выбросы CO2.\n"
         "1. Нажми /start\n"
         "2. Выбери действие\n"
-        "3. Введи количество км, часов или штук\n"
-        "4. Получи оценку выбросов и полезный совет 🌍\n\n"
-        "📊 Посмотреть суммарные выбросы: /history"
+        "3. Введи количество в км, часах или разах\n"
+        "4. Получи расчёт выбросов и совет"
     )
+
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     total = user_history.get(user_id, 0)
-    await update.message.reply_text(f"📈 Всего ты выделил {total:.2f} кг CO₂. Отличный способ следить за экологией!")
+    await update.message.reply_text(f"Суммарные выбросы: {total:.2f} кг CO2")
 
-async def handle_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
     user_id = update.effective_user.id
 
@@ -63,27 +67,26 @@ async def handle_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text in EMISSIONS:
-        context.user_data['activity'] = text
-        await update.message.reply_text(f"Сколько {'км / часов / штук'} ты использовал для «{text}»?")
-    elif 'activity' in context.user_data:
+        context.user_data["activity"] = text
+        await update.message.reply_text("Сколько? (в км, часах или разах)")
+    elif "activity" in context.user_data:
         try:
             amount = float(text)
-            activity_type = context.user_data['activity']
-            emission = EMISSIONS[activity_type] * amount
-            recommendation = RECOMMENDATIONS.get(activity_type, "Просто будь осознаннее 😇")
-
-            user_history[user_id] = user_history.get(user_id, 0) + emission
+            if amount < 0:
+                raise ValueError
+            activity = context.user_data["activity"]
+            co2 = amount * EMISSIONS[activity]
+            user_history[user_id] = user_history.get(user_id, 0) + co2
 
             await update.message.reply_text(
-                f"🌱 Действие: {activity_type}\n"
-                f"🔻 Выбросы CO₂: {emission:.2f} кг\n\n"
-                f"💡 Совет: {recommendation}"
+                f"{activity}: {co2:.2f} кг CO2\n{RECOMMENDATIONS[activity]}"
             )
             context.user_data.clear()
-        except ValueError:
-            await update.message.reply_text("Введи, пожалуйста, только число (например, 5 или 10.5).")
+        except:
+            await update.message.reply_text("Введи  число")
     else:
-        await update.message.reply_text("Сначала выбери действие через /start.")
+        await update.message.reply_text("Сначала выбери действие через /start")
+
 
 def main():
     app = ApplicationBuilder().token("7841053985:AAFLwoC66GQcLLk8JOKE1prox2nNqX_rjz4").build()
@@ -91,9 +94,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("history", history))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_activity))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("✅ Бот запущен.")
     app.run_polling()
 
 if __name__ == "__main__":
